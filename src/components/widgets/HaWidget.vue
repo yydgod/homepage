@@ -32,27 +32,14 @@ interface HaState {
   attributes?: Record<string, unknown>
 }
 
-/** HA 历史返回：二维数组，外层按实体分组 */
-type HaHistory = Array<Array<{ state: string; last_changed: string }>>
-
-const status = ref<'idle' | 'loading' | 'ready' | 'error'>('idle')
 const errorText = ref('')
 const states = ref<Map<string, HaState>>(new Map())
-const history = ref<Array<{ t: number; v: number }>>([])
-const historyRange = ref<{ min: number; max: number } | null>(null)
 const lastUpdate = ref<Date | null>(null)
 
 let stateTimer: number | undefined
-let historyTimer: number | undefined
 
 const entityList = computed(() => cfg.value?.entities ?? [])
-
-const chartEntityId = computed(() => cfg.value?.chartEntityId?.trim() || entityList.value[0]?.id || '')
-const chartHours = computed(() => cfg.value?.chartHours ?? 24)
 const refreshInterval = computed(() => (cfg.value?.refreshInterval ?? 30) * 1000)
-
-const CHART_RANGES = [1, 6, 24, 168] as const
-const RANGE_LABELS: Record<number, string> = { 1: '1h', 6: '6h', 24: '24h', 168: '7d' }
 
 /** 实体 domain → 图标 */
 const DOMAIN_ICONS: Record<string, Component> = {
@@ -67,12 +54,10 @@ const DOMAIN_ICONS: Record<string, Component> = {
   lock: Lock,
 }
 
+/** 实体 domain → 图标 */
 function domainIcon(entityId: string): Component {
   return DOMAIN_ICONS[entityId.split('.')[0]] ?? Circle
 }
-
-/** 数字型实体才可绘制统计图 */
-const chartable = computed(() => history.value.length > 0)
 
 /** 连接已配置（地址 + 令牌） */
 const connected = computed(() => Boolean(cfg.value?.baseUrl?.trim() && cfg.value?.token?.trim()))
@@ -99,69 +84,26 @@ async function fetchStates() {
     for (const s of data) map.set(s.entity_id, s)
     states.value = map
     lastUpdate.value = new Date()
-    if (status.value === 'idle' || status.value === 'loading') status.value = 'ready'
     errorText.value = ''
   } catch (err) {
     const e = err as Error
-    status.value = status.value === 'ready' ? 'ready' : 'error'
     errorText.value = e.message
     console.error('[HA] 状态拉取失败', e)
-  }
-}
-
-/** 拉取统计图实体的历史数据 */
-async function fetchHistory() {
-  if (!connected.value || !chartEntityId.value) return
-  const id = chartEntityId.value
-  try {
-    const start = new Date(Date.now() - chartHours.value * 3600 * 1000)
-    const startIso = start.toISOString().replace(/\.\d{3}Z$/, 'Z')
-    const url = `${apiBase()}/api/history/period/${encodeURIComponent(startIso)}?filter_entity_id=${encodeURIComponent(id)}&minimal_response&no_attributes`
-    const res = await fetch(url, { headers: authHeaders() })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = (await res.json()) as HaHistory
-    const rows = data[0] ?? []
-    const points: Array<{ t: number; v: number }> = []
-    for (const row of rows) {
-      const v = Number.parseFloat(String(row.state))
-      if (!Number.isFinite(v)) continue
-      const t = new Date(row.last_changed).getTime()
-      points.push({ t, v })
-    }
-    // 降采样到最多 120 个点
-    const step = Math.max(1, Math.ceil(points.length / 120))
-    const sampled = points.filter((_, i) => i % step === 0 || i === points.length - 1)
-    history.value = sampled
-    if (sampled.length > 0) {
-      const vs = sampled.map((p) => p.v)
-      historyRange.value = { min: Math.min(...vs), max: Math.max(...vs) }
-    } else {
-      historyRange.value = null
-    }
-  } catch (err) {
-    console.error('[HA] 历史拉取失败', err)
   }
 }
 
 function startTimers() {
   stopTimers()
   stateTimer = window.setInterval(fetchStates, refreshInterval.value)
-  historyTimer = window.setInterval(fetchHistory, 120000)
 }
 
 function stopTimers() {
   if (stateTimer) window.clearInterval(stateTimer)
-  if (historyTimer) window.clearInterval(historyTimer)
   stateTimer = undefined
-  historyTimer = undefined
 }
 
 onMounted(() => {
-  if (connected.value) {
-    status.value = 'loading'
-    void fetchStates()
-    void fetchHistory()
-  }
+  if (connected.value) void fetchStates()
   startTimers()
 })
 
@@ -170,16 +112,10 @@ onBeforeUnmount(stopTimers)
 watch(
   () => [cfg.value?.baseUrl, cfg.value?.token, entityList.value.map((e) => e.id).join(',')],
   () => {
-    if (connected.value) {
-      void fetchStates()
-      void fetchHistory()
-    }
+    if (connected.value) void fetchStates()
     startTimers()
   },
 )
-
-watch(chartEntityId, () => void fetchHistory())
-watch(chartHours, () => void fetchHistory())
 
 /** 实体展示信息 */
 function entityInfo(item: { id: string; label?: string; unit?: string }) {
@@ -191,6 +127,7 @@ function entityInfo(item: { id: string; label?: string; unit?: string }) {
     label: item.label || friendlyName,
     state: state?.state ?? '—',
     unit,
+    numeric: state !== undefined && Number.isFinite(Number.parseFloat(state.state)),
   }
 }
 
@@ -226,7 +163,7 @@ function addEntityInCard() {
     ...cur.entities,
     { id, label: newEntityLabel.value.trim() || undefined, unit: newEntityUnit.value.trim() || undefined },
   ]
-  emit('update', { ha: { ...cur, entities, chartEntityId: cur.chartEntityId || id } })
+  emit('update', { ha: { ...cur, entities } })
   newEntityId.value = ''
   newEntityLabel.value = ''
   newEntityUnit.value = ''
@@ -235,58 +172,7 @@ function addEntityInCard() {
 
 function removeEntityInCard(id: string) {
   const cur = cfg.value as HaConfig
-  const entities = cur.entities.filter((e) => e.id !== id)
-  emit('update', {
-    ha: { ...cur, entities, chartEntityId: cur.chartEntityId === id ? entities[0]?.id ?? '' : cur.chartEntityId },
-  })
-}
-
-/** SVG 面积图坐标（viewBox 100x36，底部留 4 给填充） */
-const chartViewBox = { w: 100, h: 36 }
-
-const areaPath = computed(() => {
-  if (!chartable.value || !historyRange.value) return ''
-  const { min, max } = historyRange.value
-  const span = max - min || 1
-  const t0 = history.value[0].t
-  const t1 = history.value[history.value.length - 1].t
-  const tSpan = t1 - t0 || 1
-  const yTop = 2
-  const yBottom = chartViewBox.h - 2
-  const points = history.value.map((p) => {
-    const x = ((p.t - t0) / tSpan) * chartViewBox.w
-    const y = yBottom - ((p.v - min) / span) * (yBottom - yTop)
-    return `${x.toFixed(2)},${y.toFixed(2)}`
-  })
-  const line = points.join(' ')
-  return `M${points[0]} L${line.replaceAll(' ', ' L')} L${chartViewBox.w},${yBottom} L0,${yBottom} Z`
-})
-
-const linePoints = computed(() => {
-  if (!chartable.value || !historyRange.value) return ''
-  const { min, max } = historyRange.value
-  const span = max - min || 1
-  const t0 = history.value[0].t
-  const t1 = history.value[history.value.length - 1].t
-  const tSpan = t1 - t0 || 1
-  const yTop = 2
-  const yBottom = chartViewBox.h - 2
-  return history.value
-    .map((p) => {
-      const x = ((p.t - t0) / tSpan) * chartViewBox.w
-      const y = yBottom - ((p.v - min) / span) * (yBottom - yTop)
-      return `${x.toFixed(2)},${y.toFixed(2)}`
-    })
-    .join(' ')
-})
-
-const lastValue = computed(() => {
-  const item = entityList.value.find((e) => e.id === chartEntityId.value)
-  return item ? entityInfo(item) : null
-})
-
-function setChartHours(h: number) {
-  emit('update', { ha: { ...(cfg.value as HaConfig), chartHours: h } })
+  emit('update', { ha: { ...cur, entities: cur.entities.filter((e) => e.id !== id) } })
 }
 </script>
 
@@ -323,7 +209,7 @@ function setChartHours(h: number) {
     </div>
 
     <template v-else>
-      <!-- 状态列表 + 卡片内添加实体 -->
+      <!-- 实体状态列表 + 卡片内添加实体 -->
       <div class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pr-1">
         <div
           v-for="item in entityList"
@@ -337,8 +223,15 @@ function setChartHours(h: number) {
             :class="isActiveState(entityInfo(item).state) ? 'text-emerald-300' : 'opacity-55'"
           />
           <span class="min-w-0 flex-1 truncate text-[0.72em] opacity-80">{{ entityInfo(item).label }}</span>
-          <span class="shrink-0 text-[0.78em] font-medium tabular-nums">{{ entityInfo(item).state }}</span>
-          <span v-if="entityInfo(item).unit" class="shrink-0 text-[0.62em] opacity-50">{{ entityInfo(item).unit }}</span>
+          <!-- 数字实体：大号数值 + 单位 -->
+          <template v-if="entityInfo(item).numeric">
+            <span class="shrink-0 text-[0.95em] font-semibold tabular-nums">{{ entityInfo(item).state }}</span>
+            <span class="shrink-0 text-[0.62em] opacity-50">{{ entityInfo(item).unit }}</span>
+          </template>
+          <!-- 非数字实体：状态文本 -->
+          <template v-else>
+            <span class="shrink-0 text-[0.75em] font-medium">{{ entityInfo(item).state }}</span>
+          </template>
           <button
             class="shrink-0 cursor-pointer text-white/30 transition-colors hover:text-red-300"
             title="移除实体"
@@ -395,58 +288,10 @@ function setChartHours(h: number) {
         </button>
       </div>
 
-      <!-- 统计图 -->
-      <div class="flex shrink-0 flex-col gap-1.5">
-        <div class="flex items-center justify-between gap-2">
-          <div class="flex min-w-0 items-center gap-1.5 text-[0.65em] opacity-60">
-            <Activity :size="11" class="shrink-0" />
-            <span class="truncate">{{ lastValue?.label ?? chartEntityId }}</span>
-            <span v-if="lastValue" class="shrink-0 tabular-nums opacity-80">
-              {{ lastValue.state }}{{ lastValue.unit }}
-            </span>
-          </div>
-          <div class="flex shrink-0 gap-0.5">
-            <button
-              v-for="r in CHART_RANGES"
-              :key="r"
-              class="cursor-pointer rounded px-1 py-0.5 text-[0.6em] transition-colors"
-              :class="chartHours === r ? 'bg-white/20 text-white' : 'text-white/45 hover:bg-white/10 hover:text-white'"
-              @click="setChartHours(r)"
-            >
-              {{ RANGE_LABELS[r] }}
-            </button>
-          </div>
-        </div>
-
-        <div class="relative h-full min-h-0 w-full flex-1 overflow-hidden rounded-lg border border-white/10 bg-white/5">
-          <svg v-if="chartable && historyRange" :viewBox="`0 0 ${chartViewBox.w} ${chartViewBox.h}`" preserveAspectRatio="none" class="h-full w-full">
-            <defs>
-              <linearGradient :id="`ha-area-${widget.id}`" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="currentColor" stop-opacity="0.35" />
-                <stop offset="100%" stop-color="currentColor" stop-opacity="0" />
-              </linearGradient>
-            </defs>
-            <path :d="areaPath" :fill="`url(#ha-area-${widget.id})`" />
-            <polyline
-              :points="linePoints"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.2"
-              vector-effect="non-scaling-stroke"
-              stroke-linejoin="round"
-              stroke-linecap="round"
-            />
-          </svg>
-          <div v-else class="flex h-full items-center justify-center text-[0.62em] opacity-40">
-            暂无数值历史（仅数字型实体支持统计图）
-          </div>
-        </div>
-      </div>
-
       <!-- 错误与刷新 -->
       <div v-if="errorText" class="flex shrink-0 items-center justify-between gap-2 text-[0.6em] text-red-300/80">
         <span class="truncate">{{ errorText }}</span>
-        <button class="flex shrink-0 cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 hover:bg-white/10" @click="fetchStates(); fetchHistory()">
+        <button class="flex shrink-0 cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 hover:bg-white/10" @click="fetchStates">
           <RefreshCw :size="10" />
           重试
         </button>

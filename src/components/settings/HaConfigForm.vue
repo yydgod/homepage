@@ -89,16 +89,7 @@ function submit() {
     </section>
 
     <section class="space-y-3">
-      <h3 class="text-sm font-medium text-white/85">统计图</h3>
-      <div class="flex items-center gap-2">
-        <input v-model="chartEntityId" type="text" placeholder="统计实体 ID（默认取第一个实体）" class="glass-input min-w-0 flex-1 font-mono !text-xs" />
-        <select v-model.number="chartHours" class="glass-input !w-24 !text-xs">
-          <option :value="1">1 小时</option>
-          <option :value="6">6 小时</option>
-          <option :value="24">24 小时</option>
-          <option :value="168">7 天</option>
-        </select>
-      </div>
+      <h3 class="text-sm font-medium text-white/85">刷新设置</h3>
       <div class="flex items-center gap-2">
         <span class="shrink-0 text-xs text-white/50">状态刷新间隔</span>
         <select v-model.number="refreshInterval" class="glass-input !w-24 !text-xs">
@@ -108,7 +99,7 @@ function submit() {
           <option :value="300">5 分钟</option>
         </select>
       </div>
-      <p class="text-xs leading-relaxed text-white/40">统计图仅对数值型实体生效（温度、湿度、功率、电量等），时间范围也可在插件卡片的图表右上角随时切换。</p>
+      <p class="text-xs leading-relaxed text-white/40">数字类实体（温度、湿度、功率、电量等）会以加粗大字号展示数值与单位。</p>
     </section>
 
     <button
