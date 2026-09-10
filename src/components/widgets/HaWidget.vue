@@ -87,7 +87,12 @@ async function fetchStates() {
     errorText.value = ''
   } catch (err) {
     const e = err as Error
-    errorText.value = e.message
+    // 浏览器对跨域/私有网络拦截的报错统一为 TypeError: Failed to fetch，转成可读提示
+    if (e.name === 'TypeError') {
+      errorText.value = '请求被浏览器拦截：请检查 HA 的 cors_allowed_origins 配置（file:// 需填 "null"），或 Chrome 的 Private Network Access 限制'
+    } else {
+      errorText.value = e.message
+    }
     console.error('[HA] 状态拉取失败', e)
   }
 }
@@ -204,7 +209,8 @@ function removeEntityInCard(id: string) {
         连接
       </button>
       <p class="text-[0.58em] leading-relaxed opacity-40">
-        令牌在 HA「个人资料」创建；需在 configuration.yaml 配置 cors_allowed_origins: ["null"] 允许本页访问
+        令牌在 HA「个人资料」创建。连接前需在 HA 的 configuration.yaml 配置跨域：http: cors_allowed_origins: ["null"]（file:// 的 Origin 是字符串 null），
+        并用 Chrome 打开 chrome://flags/#block-insecure-private-network-requests 关闭 Private Network Access 拦截，然后重启 HA
       </p>
     </div>
 

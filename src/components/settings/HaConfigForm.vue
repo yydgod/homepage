@@ -61,9 +61,11 @@ function submit() {
         <input v-model="token" type="password" placeholder="长期访问令牌（个人资料页创建）" class="glass-input font-mono !text-xs" />
       </div>
       <p class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs leading-relaxed text-white/45">
-        令牌在 HA 前端「个人资料 → 长期访问令牌」创建。由于起始页以 file:// 打开，需在 HA 的 configuration.yaml 中允许跨域：
+        令牌在 HA 前端「个人资料 → 长期访问令牌」创建。由于起始页以 file:// 打开（Origin 是字符串 null），需在 HA 的 configuration.yaml 中配置：
         <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-white/70">http: cors_allowed_origins: ["null"]</code>
-        （或通过 HTTPS 反代访问并加入对应域名）。
+        然后重启 HA。若 Chrome 报 Private Network Access，打开
+        <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-white/70">chrome://flags/#block-insecure-private-network-requests</code>
+        设为 Disabled。
       </p>
     </section>
 
