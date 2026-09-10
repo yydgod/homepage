@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { ChatMessage, WidgetConfig } from '../../types'
 import { debounce } from '../../utils/storage'
-import { Send, Sparkles, Trash2 } from 'lucide-vue-next'
+import { ChevronsDownUp, Send, Sparkles, Trash2 } from 'lucide-vue-next'
 
 // GFM 语法（表格/任务列表/删除线）+ 换行转 <br>
 marked.setOptions({ gfm: true, breaks: true })
@@ -35,6 +35,38 @@ const sending = ref(false)
 const errorText = ref('')
 const listEl = ref<HTMLDivElement | null>(null)
 
+const collapsed = computed(() => props.widget.collapsed === true)
+
+/** 插件卡片根节点（折叠/展开两个分支共用同一 ref） */
+const rootEl = ref<HTMLElement | null>(null)
+
+/** 点击插件卡片以外的页面空白处 → 自动折叠 */
+function onDocClick(e: MouseEvent) {
+  if (collapsed.value) return
+  const target = e.target as Node | null
+  if (target && rootEl.value && !rootEl.value.contains(target)) {
+    collapse()
+  }
+}
+
+onMounted(() => document.addEventListener('click', onDocClick, true))
+onBeforeUnmount(() => document.removeEventListener('click', onDocClick, true))
+
+function toggleCollapsed() {
+  if (props.widget.collapsed !== true) collapse()
+  else expand()
+}
+
+function collapse() {
+  // 折叠：记录原高度并把卡片收缩到一行
+  emit('update', { collapsed: true, collapsedHeight: props.widget.h, h: 1 })
+}
+
+function expand() {
+  // 展开：恢复折叠前的高度
+  emit('update', { collapsed: false, h: props.widget.collapsedHeight ?? 4 })
+}
+
 const messages = ref<ChatMessage[]>([...(props.widget.chatMessages ?? [])])
 
 const persistMessages = debounce(() => {
@@ -49,16 +81,20 @@ function scrollToBottom() {
   })
 }
 
+/** 发送消息；折叠态发送后自动展开展示对话 */
 async function send() {
   const content = input.value.trim()
   const chat = props.widget.chat
   if (!content || sending.value) return
   if (!chat?.apiKey) {
     errorText.value = '未配置 API Key，请点击右上角编辑按钮填写'
+    expand()
     return
   }
   errorText.value = ''
   input.value = ''
+  // 折叠态发送后自动展开，展示对话
+  if (collapsed.value) expand()
   messages.value.push({ role: 'user', content })
   // 先放入空的 AI 消息占位（流式输出时实时填充）
   messages.value.push({ role: 'assistant', content: '' })
@@ -150,9 +186,41 @@ function clearChat() {
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <!-- 折叠态：一行输入框，点击输入框自动展开 -->
+  <div ref="rootEl" v-if="collapsed" class="flex h-full w-full items-center gap-1.5 px-2.5">
+    <input
+      v-model="input"
+      type="text"
+      placeholder="输入消息，回车发送"
+      class="h-9 min-w-0 flex-1 rounded-full border border-white/10 bg-white/10 px-3.5 text-[0.85em] outline-none backdrop-blur-md transition-colors [color:var(--font-color)] placeholder:text-white/35 focus:border-primary/60"
+      @focus="expand"
+      @keydown.enter="send()"
+    />
+    <button
+      class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-pink text-white shadow-md transition-all duration-200 hover:scale-110 active:scale-95"
+      title="发送"
+      @click="send()"
+    >
+      <Send :size="12" />
+    </button>
+  </div>
+
+  <!-- 展开态 -->
+  <div ref="rootEl" v-else class="flex h-full flex-col">
+    <!-- 顶部条：折叠按钮固定在左上角 -->
+    <div class="flex shrink-0 items-center gap-2.5 px-3 pb-1 pt-2">
+      <button
+        class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center text-black transition-transform duration-200 hover:scale-125 active:scale-90"
+        :title="collapsed ? '展开对话' : '折叠对话'"
+        @click="toggleCollapsed"
+      >
+        <ChevronsDownUp :size="16" />
+      </button>
+      <span class="text-[0.65em] opacity-60">DeepSeek</span>
+    </div>
+
     <!-- 消息列表 -->
-    <div ref="listEl" class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2.5 pt-6">
+    <div ref="listEl" class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2.5">
       <div v-if="messages.length === 0" class="flex flex-1 flex-col items-center justify-center gap-1.5 text-center opacity-45">
         <Sparkles :size="20" />
         <div class="text-[0.75em]">与 DeepSeek 开始对话吧</div>
@@ -161,7 +229,7 @@ function clearChat() {
       <template v-for="(msg, i) in messages" :key="i">
         <!-- 用户消息：右侧主题渐变气泡 -->
         <div v-if="msg.role === 'user'" class="flex justify-end">
-          <div class="max-w-[85%] rounded-xl rounded-br-sm bg-gradient-to-br from-primary to-primary-pink px-3 py-1.5 text-[0.78em] leading-relaxed shadow-md">
+          <div class="max-w-[85%] rounded-xl rounded-br-sm bg-gradient-to-br from-primary to-primary-pink px-3 py-1.5 text-[0.78em] leading-relaxed shadow-md backdrop-blur-md">
             {{ msg.content }}
           </div>
         </div>
@@ -169,10 +237,10 @@ function clearChat() {
         <div v-else class="flex justify-start">
           <div
             v-if="msg.content"
-            class="chat-markdown max-w-[85%] rounded-xl rounded-bl-sm border border-white/10 bg-white/10 px-3 py-1.5 text-[0.78em] leading-relaxed"
+            class="chat-markdown max-w-[85%] rounded-xl rounded-bl-sm border border-white/10 bg-white/10 px-3 py-1.5 text-[0.78em] leading-relaxed backdrop-blur-md"
             v-html="markdownHtml(msg)"
           />
-          <div v-else class="flex items-center gap-1 rounded-xl rounded-bl-sm border border-white/10 bg-white/10 px-3 py-2">
+          <div v-else class="flex items-center gap-1 rounded-xl rounded-bl-sm border border-white/10 bg-white/10 px-3 py-2 backdrop-blur-md">
             <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-white/70" />
             <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-white/70" style="animation-delay: 0.15s" />
             <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-white/70" style="animation-delay: 0.3s" />
@@ -190,7 +258,7 @@ function clearChat() {
         v-model="input"
         type="text"
         placeholder="输入消息，回车发送"
-        class="w-full bg-transparent text-[0.78em] outline-none placeholder:text-white/35"
+        class="h-9 min-w-0 flex-1 rounded-full border border-white/10 bg-white/10 px-3.5 text-[0.78em] outline-none backdrop-blur-md transition-colors [color:var(--font-color)] placeholder:text-white/35 focus:border-primary/60"
         @keyup.enter="send"
       />
       <button

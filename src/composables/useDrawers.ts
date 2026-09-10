@@ -10,7 +10,7 @@ watch(drawers, () => saveDrawers(drawers.value), { deep: true })
 
 export function useDrawers() {
   function addDrawer(name: string) {
-    drawers.value.push({ id: uid('dr'), name: name.trim() || '新抽屉', x: 0, y: 0, w: 8, h: 2, shortcuts: [] })
+    drawers.value.push({ id: uid('dr'), name: name.trim(), x: 0, y: 0, w: 8, h: 2, shortcuts: [] })
   }
 
   function updateDrawer(id: string, patch: Partial<DrawerConfig>) {

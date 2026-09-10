@@ -57,6 +57,7 @@ export const SEARCH_ENGINES: SearchEngine[] = [
   { id: 'google', name: 'Google', url: 'https://www.google.com/search?q={q}' },
   { id: 'sogou', name: '搜狗', url: 'https://www.sogou.com/web?query={q}' },
   { id: 'github', name: 'GitHub', url: 'https://github.com/search?q={q}' },
+  { id: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com/?q={q}' },
 ]
 
 // ---------- 插件预设清单（设置面板中供用户添加） ----------
@@ -126,5 +127,20 @@ export const WIDGET_PRESETS: WidgetPreset[] = [
     name: '自定义 API',
     description: '零代码接入任意接口',
     build: () => ({ id: uid('wg'), type: 'api', title: '自定义 API', x: 0, y: 0, w: 8, h: 5, api: { ...EMPTY_API } }),
+  },
+  {
+    type: 'ha',
+    name: 'Home Assistant',
+    description: '展示家电状态与历史统计图',
+    build: () => ({
+      id: uid('wg'),
+      type: 'ha',
+      title: 'Home Assistant',
+      x: 0,
+      y: 0,
+      w: 10,
+      h: 8,
+      ha: { baseUrl: '', token: '', entities: [], chartHours: 24, refreshInterval: 30 },
+    }),
   },
 ]

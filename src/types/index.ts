@@ -26,6 +26,7 @@ export interface ShortcutConfig {
 // ---------- 抽屉（标签容器卡片） ----------
 export interface DrawerConfig {
   id: string
+  /** 抽屉名称，可留空（空字符串时不显示名称标签） */
   name: string
   /** 网格坐标与尺寸（抽屉卡片与插件共用同一网格） */
   x: number
@@ -72,6 +73,31 @@ export interface ApiConfig {
   renderTemplate: string
 }
 
+// ---------- Home Assistant 插件 ----------
+export interface HaEntityItem {
+  /** 实体 ID，如 sensor.outdoor_temp、light.living_room */
+  id: string
+  /** 自定义显示名（缺省使用实体的 friendly_name） */
+  label?: string
+  /** 覆盖显示单位（缺省使用实体的 unit_of_measurement） */
+  unit?: string
+}
+
+export interface HaConfig {
+  /** HA 地址，如 http://192.168.1.10:8123（自动补 /api 前缀） */
+  baseUrl: string
+  /** 长期访问令牌（Long-Lived Access Token） */
+  token: string
+  /** 状态卡片实体列表 */
+  entities: HaEntityItem[]
+  /** 统计图实体 ID（可选，缺省取第一个实体） */
+  chartEntityId?: string
+  /** 统计图时间范围（小时）：1/6/24/168 */
+  chartHours?: number
+  /** 状态轮询间隔（秒），默认 30 */
+  refreshInterval?: number
+}
+
 // ---------- Minecraft 服务器状态插件 ----------
 export interface McConfig {
   /** 服务器地址，如 mc.hypixel.net 或 play.example.com:25565 */
@@ -96,7 +122,7 @@ export interface ChatConfig {
 }
 
 // ---------- 插件 ----------
-export type WidgetType = 'clock' | 'todo' | 'search' | 'mc' | 'chat' | 'api'
+export type WidgetType = 'clock' | 'todo' | 'search' | 'mc' | 'chat' | 'api' | 'ha'
 
 export interface WidgetConfig {
   id: string
@@ -115,7 +141,7 @@ export interface WidgetConfig {
   api?: ApiConfig
   /** type === 'todo' 时的待办列表 */
   todos?: TodoItem[]
-  /** type === 'search' 时的搜索引擎 ID（baidu/bing/google/sogou/github） */
+  /** type === 'search' 时的搜索引擎 ID（baidu/bing/google/sogou/github/deepseek） */
   searchEngine?: string
   /** type === 'mc' 时的 MC 服务器配置 */
   mc?: McConfig
@@ -123,6 +149,12 @@ export interface WidgetConfig {
   chat?: ChatConfig
   /** type === 'chat' 时的对话历史 */
   chatMessages?: ChatMessage[]
+  /** type === 'ha' 时的 Home Assistant 配置 */
+  ha?: HaConfig
+  /** 卡片折叠状态（true 表示收起，仅显示展开入口） */
+  collapsed?: boolean
+  /** 折叠前的卡片高度（展开时恢复用） */
+  collapsedHeight?: number
   /** 内容字体缩放倍率，0.8 ~ 1.6（默认 1） */
   fontScale?: number
   /** 内容字体颜色（hex），缺省时使用默认白色系 */

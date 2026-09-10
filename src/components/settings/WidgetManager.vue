@@ -15,6 +15,7 @@ const TYPE_LABELS: Record<WidgetType, string> = {
   mc: 'MC',
   chat: '对话',
   api: 'API',
+  ha: 'HA',
 }
 
 function handleAdd(build: () => WidgetConfig) {
@@ -130,7 +131,7 @@ function setFontColor(widget: WidgetConfig, value: string) {
             />
           </button>
           <button
-            v-if="widget.type === 'api' || widget.type === 'mc' || widget.type === 'chat'"
+            v-if="widget.type === 'api' || widget.type === 'mc' || widget.type === 'chat' || widget.type === 'ha'"
             class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-white/50 transition-all hover:bg-white/15 hover:text-white"
             title="编辑配置"
             @click="editWidget(widget.id)"

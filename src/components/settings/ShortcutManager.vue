@@ -88,9 +88,8 @@ function reloadSoon() {
 }
 
 function handleAddDrawer() {
-  const name = newDrawerName.value.trim()
-  if (!name) return
-  addDrawer(name)
+  // 名称可选：留空时不展示抽屉名称标签
+  addDrawer(newDrawerName.value)
   newDrawerName.value = ''
   reloadSoon()
 }
@@ -174,7 +173,7 @@ function setFontColor(drawer: DrawerConfig, value: string) {
   <div class="space-y-6">
     <!-- 添加抽屉 -->
     <form class="flex items-center gap-2" @submit.prevent="handleAddDrawer">
-      <input v-model="newDrawerName" type="text" placeholder="新抽屉名称，如「常用」「设计资源」" class="glass-input" />
+      <input v-model="newDrawerName" type="text" placeholder="新抽屉名称（可不填），如「常用」「设计资源」" class="glass-input" />
       <button type="submit" class="glass-btn-primary shrink-0">
         <Plus :size="15" />
         添加抽屉
@@ -211,7 +210,7 @@ function setFontColor(drawer: DrawerConfig, value: string) {
             </button>
           </template>
           <template v-else>
-            <span class="min-w-0 flex-1 truncate text-sm text-white/90">{{ drawer.name }}</span>
+            <span class="min-w-0 flex-1 truncate text-sm text-white/90">{{ drawer.name || '未命名抽屉' }}</span>
             <span class="shrink-0 text-xs text-white/40">{{ drawer.shortcuts.length }} 个标签</span>
             <button
               class="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-white/50 transition-all hover:bg-white/15 hover:text-white"

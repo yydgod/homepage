@@ -11,6 +11,7 @@ import WidgetManager from './WidgetManager.vue'
 import ApiConfigForm from './ApiConfigForm.vue'
 import McConfigForm from './McConfigForm.vue'
 import ChatConfigForm from './ChatConfigForm.vue'
+import HaConfigForm from './HaConfigForm.vue'
 
 const { open, activeTab, editingWidgetId, closeSettings, backToWidgetList } = useSettings()
 const { updateWidget, findWidget } = useWidgets()
@@ -77,6 +78,7 @@ function saveApi(patch: Partial<WidgetConfig>) {
             <ShortcutManager v-else-if="activeTab === 'shortcuts'" />
             <ApiConfigForm v-else-if="editingWidget && editingWidget.type === 'api'" :widget="editingWidget" @save="saveApi" @back="backToWidgetList" />
             <McConfigForm v-else-if="editingWidget && editingWidget.type === 'mc'" :widget="editingWidget" @save="saveApi" @back="backToWidgetList" />
+            <HaConfigForm v-else-if="editingWidget && editingWidget.type === 'ha'" :widget="editingWidget" @save="saveApi" @back="backToWidgetList" />
             <ChatConfigForm v-else-if="editingWidget" :widget="editingWidget" @save="saveApi" @back="backToWidgetList" />
             <WidgetManager v-else />
           </div>

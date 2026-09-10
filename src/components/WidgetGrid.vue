@@ -13,6 +13,7 @@ import SearchWidget from './widgets/SearchWidget.vue'
 import McWidget from './widgets/McWidget.vue'
 import ChatWidget from './widgets/ChatWidget.vue'
 import ApiWidget from './widgets/ApiWidget.vue'
+import HaWidget from './widgets/HaWidget.vue'
 
 const { widgets, applyLayout: applyWidgetLayout, removeWidget, updateWidget } = useWidgets()
 const { drawers, applyLayout: applyDrawerLayout, removeDrawer, updateDrawer } = useDrawers()
@@ -40,6 +41,7 @@ const COMPONENT_MAP: Record<string, Component> = {
   mc: McWidget,
   chat: ChatWidget,
   api: ApiWidget,
+  ha: HaWidget,
 }
 
 onMounted(() => {
@@ -124,6 +126,23 @@ function handleUpdate(id: string, patch: Partial<WidgetConfig>) {
   updateWidget(id, patch)
 }
 
+// 数据高度变化（如对话插件折叠/展开）→ 同步到 gridstack 引擎
+watch(
+  () => widgets.value.map((w) => `${w.id}:${w.h}:${w.x}:${w.y}:${w.w}`),
+  (next, prev) => {
+    if (!grid || !containerEl.value) return
+    next.forEach((key, i) => {
+      if (prev && key === prev[i]) return
+      const widget = widgets.value[i]
+      if (!widget) return
+      const el = containerEl.value?.querySelector<HTMLElement>(`.grid-stack-item[gs-id="${widget.id}"]`)
+      if (el && grid.getGridItems().includes(el)) {
+        grid.update(el, { x: widget.x, y: widget.y, w: widget.w, h: widget.h })
+      }
+    })
+  },
+)
+
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncSquareCells)
   grid?.destroy(false)
@@ -180,8 +199,9 @@ onBeforeUnmount(() => {
         <DrawerCard :drawer="drawer" @remove="handleRemoveDrawer" @update="handleUpdateDrawer" />
       </div>
 
-      <!-- 抽屉名称：位于卡片框之外的下方 -->
+      <!-- 抽屉名称：位于卡片框之外的下方；未命名时不显示 -->
       <div
+        v-if="drawer.name"
         class="drawer-label"
         :style="{
           color: drawer.fontColor || 'rgba(255, 255, 255, 0.6)',
