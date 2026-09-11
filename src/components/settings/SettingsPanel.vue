@@ -3,11 +3,12 @@ import { computed } from 'vue'
 import type { WidgetConfig } from '../../types'
 import { useSettings } from '../../composables/useSettings'
 import { useWidgets } from '../../composables/useWidgets'
-import { Image, LayoutGrid, Link2, X } from 'lucide-vue-next'
+import { Database, Image, LayoutGrid, Link2, X } from 'lucide-vue-next'
 import WallpaperSettings from './WallpaperSettings.vue'
 import ThemeSettings from './ThemeSettings.vue'
 import ShortcutManager from './ShortcutManager.vue'
 import WidgetManager from './WidgetManager.vue'
+import DataSettings from './DataSettings.vue'
 import ApiConfigForm from './ApiConfigForm.vue'
 import McConfigForm from './McConfigForm.vue'
 import ChatConfigForm from './ChatConfigForm.vue'
@@ -25,6 +26,7 @@ const TABS = [
   { key: 'wallpaper', label: '壁纸', icon: Image },
   { key: 'shortcuts', label: '抽屉', icon: Link2 },
   { key: 'widgets', label: '插件', icon: LayoutGrid },
+  { key: 'data', label: '数据', icon: Database },
 ] as const
 
 function saveApi(patch: Partial<WidgetConfig>) {
@@ -76,6 +78,7 @@ function saveApi(patch: Partial<WidgetConfig>) {
               <WallpaperSettings />
             </div>
             <ShortcutManager v-else-if="activeTab === 'shortcuts'" />
+            <DataSettings v-else-if="activeTab === 'data'" />
             <ApiConfigForm v-else-if="editingWidget && editingWidget.type === 'api'" :widget="editingWidget" @save="saveApi" @back="backToWidgetList" />
             <McConfigForm v-else-if="editingWidget && editingWidget.type === 'mc'" :widget="editingWidget" @save="saveApi" @back="backToWidgetList" />
             <HaConfigForm v-else-if="editingWidget && editingWidget.type === 'ha'" :widget="editingWidget" @save="saveApi" @back="backToWidgetList" />

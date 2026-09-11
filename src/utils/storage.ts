@@ -49,6 +49,15 @@ const DEFAULT_CONFIG: AppConfig = {
   columns: GRID_COLUMNS,
 }
 
+/** 是否已有已保存的配置（localStorage 中存在即视为已编辑过） */
+export function hasSavedConfig(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null
+  } catch {
+    return false
+  }
+}
+
 /** 读取本地配置，缺字段时与默认值合并，解析失败时回退默认 */
 export function loadAppConfig(): AppConfig {
   try {
@@ -120,6 +129,8 @@ function persist(update: (config: AppConfig) => void) {
     const config = loadAppConfig()
     update(config)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+    // 已绑定本地文件时自动同步（防抖）
+    if (isFileSyncSupported()) syncToFileDebounced()
   } catch (e) {
     console.error('保存配置失败', e)
   }
@@ -156,6 +167,227 @@ export function debounce<T extends (...args: never[]) => void>(fn: T, ms = 300):
     if (timer !== null) window.clearTimeout(timer)
     timer = window.setTimeout(() => fn(...args), ms)
   }) as T
+}
+
+// ---------- 数据备份：清除浏览器记录后仍可恢复 ----------
+
+const EXPORT_FILE_NAME = '起始页配置.json'
+const IDB_NAME = 'qishiyepage'
+const IDB_STORE = 'kv'
+const IDB_HANDLE_KEY = 'config-file-handle'
+
+/** 是否支持 File System Access API（Chrome/Edge；file:// 下可用） */
+export function isFileSyncSupported(): boolean {
+  return typeof window !== 'undefined' && 'showSaveFilePicker' in window
+}
+
+/** 极简 IndexedDB 键值封装（持久化文件句柄，清除站点数据后句柄丢失但磁盘文件仍在） */
+function idbOpen(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1)
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE)
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function idbSet(key: string, value: unknown): Promise<void> {
+  const db = await idbOpen()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite')
+    tx.objectStore(IDB_STORE).put(value, key)
+    tx.oncomplete = () => {
+      db.close()
+      resolve()
+    }
+    tx.onerror = () => {
+      db.close()
+      reject(tx.error)
+    }
+  })
+}
+
+async function idbGet<T>(key: string): Promise<T | undefined> {
+  const db = await idbOpen()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly')
+    const req = tx.objectStore(IDB_STORE).get(key)
+    req.onsuccess = () => {
+      db.close()
+      resolve(req.result as T | undefined)
+    }
+    req.onerror = () => {
+      db.close()
+      reject(req.error)
+    }
+  })
+}
+
+async function idbDelete(key: string): Promise<void> {
+  const db = await idbOpen()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite')
+    tx.objectStore(IDB_STORE).delete(key)
+    tx.oncomplete = () => {
+      db.close()
+      resolve()
+    }
+    tx.onerror = () => {
+      db.close()
+      reject(tx.error)
+    }
+  })
+}
+
+/** 当前绑定的本地同步文件句柄 */
+let boundHandle: FileSystemFileHandle | null = null
+
+/**
+ * 绑定已有本地文件：之后每次保存配置都会自动写入该文件。
+ * 若文件内已是有效配置则直接使用（不覆盖），返回 usedExisting = true。
+ */
+export async function bindLocalFile(): Promise<{ handle: FileSystemFileHandle; usedExisting: boolean }> {
+  const [handle] = await window.showOpenFilePicker({
+    types: [
+      {
+        description: 'JSON 配置文件',
+        accept: { 'application/json': ['.json'] },
+      },
+    ],
+  })
+  boundHandle = handle
+  await idbSet(IDB_HANDLE_KEY, handle)
+  // 文件已有有效配置：直接使用文件内容，不覆盖
+  try {
+    const file = await handle.getFile()
+    const text = await file.text()
+    const parsed = JSON.parse(text) as AppConfig
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.widgets)) {
+      localStorage.setItem(STORAGE_KEY, text)
+      return { handle, usedExisting: true }
+    }
+  } catch {
+    // 空文件或非 JSON：继续写入当前配置
+  }
+  await syncToBoundFile()
+  return { handle, usedExisting: false }
+}
+
+/** 新建备份文件：把当前配置写入用户选择的新文件 */
+export async function createLocalFile(): Promise<FileSystemFileHandle> {
+  const handle = await window.showSaveFilePicker({
+    suggestedName: EXPORT_FILE_NAME,
+    types: [
+      {
+        description: 'JSON 配置文件',
+        accept: { 'application/json': ['.json'] },
+      },
+    ],
+  })
+  boundHandle = handle
+  await idbSet(IDB_HANDLE_KEY, handle)
+  await syncToBoundFile()
+  return handle
+}
+
+/** 读取已绑定的文件句柄（页面启动时恢复用） */
+export async function loadBoundFileHandle(): Promise<FileSystemFileHandle | null> {
+  if (!isFileSyncSupported()) return null
+  try {
+    const handle = await idbGet<FileSystemFileHandle>(IDB_HANDLE_KEY)
+    boundHandle = handle ?? null
+    return boundHandle
+  } catch {
+    return null
+  }
+}
+
+/** 将当前配置写入绑定文件（自动同步）；供 persist 防抖调用与手动触发 */
+export async function syncToBoundFile(): Promise<boolean> {
+  if (!boundHandle) return false
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return false
+    const writable = await boundHandle.createWritable()
+    await writable.write(raw)
+    await writable.close()
+    return true
+  } catch (err) {
+    console.error('[备份] 自动同步文件失败', err)
+    return false
+  }
+}
+
+/** persist 时自动同步到绑定文件（防抖） */
+const syncToFileDebounced = debounce(() => void syncToBoundFile(), 400)
+
+/** 配置保存后调用（内部已接入 persist 流程） */
+export function notifyConfigChanged() {
+  syncToFileDebounced()
+}
+
+/** 从绑定文件恢复配置（清除站点数据后启动时自动调用，成功返回 true） */
+export async function restoreFromBoundFile(): Promise<boolean> {
+  if (!boundHandle) return false
+  try {
+    const perm = await boundHandle.queryPermission({ mode: 'readwrite' })
+    if (perm !== 'granted') {
+      const requested = await boundHandle.requestPermission({ mode: 'readwrite' })
+      if (requested !== 'granted') return false
+    }
+    const file = await boundHandle.getFile()
+    const text = await file.text()
+    const parsed = JSON.parse(text) as AppConfig
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.widgets)) return false
+    localStorage.setItem(STORAGE_KEY, text)
+    return true
+  } catch (err) {
+    console.error('[备份] 从文件恢复失败', err)
+    return false
+  }
+}
+
+/** 解除文件绑定 */
+export async function unbindLocalFile(): Promise<void> {
+  boundHandle = null
+  await idbDelete(IDB_HANDLE_KEY)
+}
+
+/** 导出配置为 JSON 下载 */
+export function exportConfigFile() {
+  const raw = localStorage.getItem(STORAGE_KEY)
+  if (!raw) return
+  const blob = new Blob([raw], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = EXPORT_FILE_NAME
+  a.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 3000)
+}
+
+/** 从本地文件导入配置（读取后校验并覆盖当前配置），成功返回 true */
+export function importConfigFile(file: File): Promise<boolean> {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result)) as AppConfig
+        if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.widgets)) {
+          resolve(false)
+          return
+        }
+        localStorage.setItem(STORAGE_KEY, String(reader.result))
+        resolve(true)
+      } catch {
+        resolve(false)
+      }
+    }
+    reader.onerror = () => resolve(false)
+    reader.readAsText(file)
+  })
 }
 
 function clone<T>(obj: T): T {

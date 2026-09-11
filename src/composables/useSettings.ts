@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-export type SettingsTab = 'wallpaper' | 'shortcuts' | 'widgets'
+export type SettingsTab = 'wallpaper' | 'shortcuts' | 'widgets' | 'data'
 
 // 模块级单例：设置抽屉的打开状态、激活标签页与编辑目标
 const open = ref(false)
