@@ -6,12 +6,13 @@ import { RefreshCw } from 'lucide-vue-next'
 
 const props = defineProps<{ widget: WidgetConfig }>()
 
-/** 构造 mcsrvstat 查询配置（支持 CORS，file:// 下可用） */
+/** mcstatus.io 在线查询（Access-Control-Allow-Origin: *，浏览器直连） */
 function buildApi(): ApiConfig | undefined {
   const server = props.widget.mc?.server?.trim()
   if (!server) return undefined
+  const kind = props.widget.mc?.protocol === 'bedrock' ? 'bedrock' : 'java'
   return {
-    url: `https://api.mcsrvstat.us/3/${encodeURIComponent(server)}`,
+    url: `https://api.mcstatus.io/v2/status/${kind}/${encodeURIComponent(server)}`,
     method: 'GET',
     headers: [],
     params: [],
@@ -25,15 +26,13 @@ function buildApi(): ApiConfig | undefined {
 
 const { status, rawData, errorMessage, retry } = useApiRequest(buildApi)
 
+/** mcstatus.io 响应结构 */
 interface McResponse {
   online?: boolean
-  hostname?: string
-  ip?: string
-  port?: number
-  version?: string
-  icon?: string
-  motd?: { raw?: string[]; clean?: string[]; html?: string[] }
-  players?: { online?: number; max?: number; list?: Array<{ name: string }> }
+  version?: { name_clean?: string; name?: string }
+  players?: { online?: number; max?: number }
+  motd?: { clean?: string; raw?: string }
+  edition?: string
 }
 
 const data = computed(() => rawData.value as McResponse | null)
@@ -41,6 +40,16 @@ const online = computed(() => data.value?.online === true)
 const serverLabel = computed(() => props.widget.mc?.server?.trim() || '未配置服务器')
 const onlineCount = computed(() => data.value?.players?.online ?? 0)
 const maxCount = computed(() => data.value?.players?.max ?? 0)
+const version = computed(() => data.value?.version?.name_clean ?? data.value?.version?.name ?? '')
+
+/** 可读错误提示 */
+const friendlyError = computed(() => {
+  const msg = errorMessage.value ?? ''
+  if (msg.toLowerCase().includes('failed to fetch')) {
+    return '在线查询失败：请确认服务器公网可达（如 frp 转发），且地址格式为 host:port'
+  }
+  return msg
+})
 </script>
 
 <template>
@@ -54,7 +63,7 @@ const maxCount = computed(() => data.value?.players?.max ?? 0)
 
       <!-- 查询失败 -->
       <div v-else-if="status === 'error'" class="flex w-full flex-col items-center gap-2.5 text-center">
-        <div class="text-[0.75em] leading-relaxed text-red-300/90">查询失败：{{ errorMessage }}</div>
+        <div class="text-[0.75em] leading-relaxed text-red-300/90">{{ friendlyError }}</div>
         <button class="glass-btn !px-3 !py-1 !text-[0.75em]" @click="retry">
           <RefreshCw :size="12" />
           重试
@@ -76,8 +85,8 @@ const maxCount = computed(() => data.value?.players?.max ?? 0)
         </div>
 
         <!-- 服务器版本 -->
-        <div v-if="online && data?.version" class="text-[0.7em] opacity-60">
-          版本 {{ data.version }}
+        <div v-if="online && version" class="text-[0.7em] opacity-60">
+          版本 {{ version }}
         </div>
 
         <!-- 在线人数 -->

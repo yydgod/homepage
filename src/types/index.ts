@@ -100,8 +100,10 @@ export interface HaConfig {
 
 // ---------- Minecraft 服务器状态插件 ----------
 export interface McConfig {
-  /** 服务器地址，如 mc.hypixel.net 或 play.example.com:25565 */
+  /** 服务器地址，如 frp-any.com:43544 或 mc.hypixel.net */
   server: string
+  /** 服务器类型：java（Java 版）或 bedrock（基岩版），默认 java */
+  protocol?: 'java' | 'bedrock'
 }
 
 // ---------- DeepSeek 对话插件 ----------

@@ -91,8 +91,8 @@ export const WIDGET_PRESETS: WidgetPreset[] = [
   {
     type: 'mc',
     name: 'MC 服务器',
-    description: '查询指定 MC 服务器的在线情况',
-    build: () => ({ id: uid('wg'), type: 'mc', title: 'MC 服务器', x: 0, y: 0, w: 8, h: 5, mc: { server: 'play.cubecraft.net' } }),
+    description: '查询 MC 服务器在线情况',
+    build: () => ({ id: uid('wg'), type: 'mc', title: 'MC 服务器', x: 0, y: 0, w: 8, h: 5, mc: { server: 'mc.hypixel.net', protocol: 'java' } }),
   },
   {
     type: 'chat',
