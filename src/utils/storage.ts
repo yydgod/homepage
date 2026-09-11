@@ -17,46 +17,17 @@ const DEFAULT_CONFIG: AppConfig = {
     overlayColor: '#0F172A',
     overlayOpacity: 0.3,
   },
-  drawers: [
-    {
-      id: 'dr-common',
-      name: '常用',
-      x: 0,
-      y: 0,
-      w: 24,
-      h: 2,
-      shortcuts: [
-        { id: 'sc-baidu', name: '百度', url: 'https://www.baidu.com' },
-        { id: 'sc-bilibili', name: '哔哩哔哩', url: 'https://www.bilibili.com' },
-        { id: 'sc-github', name: 'GitHub', url: 'https://github.com' },
-        { id: 'sc-zhihu', name: '知乎', url: 'https://www.zhihu.com' },
-        { id: 'sc-douyin', name: '抖音', url: 'https://www.douyin.com' },
-      ],
-    },
-    {
-      id: 'dr-dev',
-      name: '开发',
-      x: 0,
-      y: 2,
-      w: 24,
-      h: 2,
-      shortcuts: [
-        { id: 'sc-mdn', name: 'MDN', url: 'https://developer.mozilla.org' },
-        { id: 'sc-stack', name: 'Stack Overflow', url: 'https://stackoverflow.com' },
-        { id: 'sc-vite', name: 'Vite', url: 'https://vitejs.dev' },
-        { id: 'sc-juejin', name: '掘金', url: 'https://juejin.cn' },
-      ],
-    },
-  ],
+  // 默认不含抽屉：首屏直接展示插件，抽屉由用户在设置中自行添加
+  drawers: [],
   widgets: [
-    { id: 'wg-search', type: 'search', title: '搜索框', x: 0, y: 4, w: 12, h: 3, searchEngine: 'baidu' },
-    { id: 'wg-clock', type: 'clock', title: '时钟', x: 12, y: 4, w: 8, h: 3 },
+    { id: 'wg-search', type: 'search', title: '搜索框', x: 0, y: 0, w: 12, h: 3, searchEngine: 'baidu' },
+    { id: 'wg-clock', type: 'clock', title: '时钟', x: 12, y: 0, w: 8, h: 3 },
     {
       id: 'wg-todo',
       type: 'todo',
       title: '待办清单',
       x: 0,
-      y: 7,
+      y: 3,
       w: 8,
       h: 7,
       todos: [
@@ -69,7 +40,7 @@ const DEFAULT_CONFIG: AppConfig = {
       type: 'api',
       title: '一言',
       x: 8,
-      y: 7,
+      y: 3,
       w: 8,
       h: 5,
       api: { ...HITOKOTO_API },
@@ -84,9 +55,9 @@ export function loadAppConfig(): AppConfig {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return clone(DEFAULT_CONFIG)
     const parsed = JSON.parse(raw) as Partial<AppConfig>
-    // 抽屉数据：优先使用已保存的 drawers
+    // 抽屉数据：优先使用已保存的 drawers（空数组同样生效，表示用户删光了抽屉）
     let drawers: DrawerConfig[]
-    if (Array.isArray(parsed.drawers) && parsed.drawers.length > 0) {
+    if (Array.isArray(parsed.drawers)) {
       drawers = parsed.drawers
     } else if (Array.isArray(parsed.shortcuts) && parsed.shortcuts.length > 0) {
       // 旧数据迁移：把独立的快捷方式列表收进一个「常用」抽屉
@@ -110,7 +81,7 @@ export function loadAppConfig(): AppConfig {
       drawers = clone(DEFAULT_CONFIG.drawers)
     }
     // 旧数据迁移：历史布局基于 12 列，切换 24 列后坐标等比 ×2
-    const needsScale = parsed.columns !== GRID_COLUMNS && (Array.isArray(parsed.widgets) || drawers.length > 0)
+    const needsScale = parsed.columns !== GRID_COLUMNS
     if (needsScale) {
       drawers = drawers.map((d) => ({
         ...d,

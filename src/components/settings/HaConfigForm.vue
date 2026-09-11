@@ -61,10 +61,16 @@ function submit() {
         <input v-model="token" type="password" placeholder="长期访问令牌（个人资料页创建）" class="glass-input font-mono !text-xs" />
       </div>
       <p class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs leading-relaxed text-white/45">
-        令牌在 HA 前端「个人资料 → 长期访问令牌」创建。由于起始页以 file:// 打开（Origin 是字符串 null），需在 HA 的 configuration.yaml 中配置：
+        令牌在 HA 前端「个人资料 → 长期访问令牌」创建。起始页以 file:// 打开，浏览器会拦截直连局域网 HA 的跨域请求。
+        <span class="text-white/70">推荐方案</span>：运行项目内代理脚本
+        <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-white/70">python3 tools/ha-cors-proxy.py</code>
+        （先改脚本里的 HA 地址），插件「HA 地址」填
+        <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-white/70">http://localhost:8899</code>
+        即可彻底绕开拦截。
+        <span class="text-white/70">或手动配置</span>：HA configuration.yaml 加
         <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-white/70">http: cors_allowed_origins: ["null"]</code>
-        然后重启 HA。若 Chrome 报 Private Network Access，打开
-        <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-white/70">chrome://flags/#block-insecure-private-network-requests</code>
+        重启 HA，并把 Chrome 的
+        <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-white/70">chrome://flags/#local-network-access-check</code>
         设为 Disabled。
       </p>
     </section>

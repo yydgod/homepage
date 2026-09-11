@@ -4,3 +4,7 @@ node_modules/
 .DS_Store
 *.log
 .snap-*.yml
+
+# 本地数据目录（本地修改持久化，不入库；示例配置除外）
+data/*
+!data/*.example.json

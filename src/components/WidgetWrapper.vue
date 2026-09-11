@@ -105,7 +105,7 @@ function setFontColor(event: Event) {
           <Ghost :size="12" />
         </button>
         <button
-          v-if="widget.type === 'api' || widget.type === 'mc' || widget.type === 'chat'"
+          v-if="widget.type === 'api' || widget.type === 'mc' || widget.type === 'chat' || widget.type === 'ha'"
           class="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-white/60 transition-all hover:bg-white/15 hover:text-white"
           title="编辑配置"
           @click="handleEdit"
